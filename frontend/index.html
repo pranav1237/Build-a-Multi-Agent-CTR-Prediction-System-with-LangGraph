@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Agent CTR Prediction System</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Navbar -->
+        <header class="app-header">
+            <div class="header-logo">
+                <i class="fa-solid fa-network-wired logo-icon"></i>
+                <div class="logo-text">
+                    <h1>CTR Agentic</h1>
+                    <span>Multi-Agent Prediction Platform</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div id="llm-status" class="status-badge fallback">
+                    <span class="status-dot"></span>
+                    <span class="status-label">Checking connection...</span>
+                </div>
+                <button id="settings-btn" class="icon-btn" title="Configure LLM API Key">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+            </div>
+        </header>
+
+        <div class="main-layout">
+            <!-- Sidebar Navigation -->
+            <aside class="app-sidebar">
+                <nav class="nav-menu">
+                    <button class="nav-item active" data-target="upload-view">
+                        <i class="fa-solid fa-cloud-arrow-up nav-icon"></i>
+                        <span>1. Upload Dataset</span>
+                    </button>
+                    <button class="nav-item disabled" data-target="config-view" id="nav-config">
+                        <i class="fa-solid fa-sliders nav-icon"></i>
+                        <span>2. Configure Pipeline</span>
+                    </button>
+                    <button class="nav-item disabled" data-target="run-view" id="nav-run">
+                        <i class="fa-solid fa-circle-play nav-icon"></i>
+                        <span>3. LangGraph Workflow</span>
+                    </button>
+                    <button class="nav-item disabled" data-target="analytics-view" id="nav-analytics">
+                        <i class="fa-solid fa-chart-line nav-icon"></i>
+                        <span>4. Model Analytics</span>
+                    </button>
+                    <button class="nav-item disabled" data-target="sandbox-view" id="nav-sandbox">
+                        <i class="fa-solid fa-flask nav-icon"></i>
+                        <span>5. Inference Sandbox</span>
+                    </button>
+                </nav>
+                <div class="sidebar-footer">
+                    <p>Powered by LangGraph & FastAPI</p>
+                </div>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="app-content">
+                <!-- 1. Upload Dataset View -->
+                <section id="upload-view" class="view-panel active">
+                    <div class="panel-header">
+                        <h2>Upload CTR Dataset</h2>
+                        <p>Select or drag-and-drop a CSV file to inspect columns and preview record rows.</p>
+                    </div>
+
+                    <div class="upload-area" id="drop-zone">
+                        <input type="file" id="file-input" accept=".csv" style="display: none;">
+                        <i class="fa-solid fa-file-csv upload-placeholder-icon"></i>
+                        <h3>Drag & drop your CSV file here</h3>
+                        <p>or click to browse local files</p>
+                        <span class="file-limits">Supports standard click-through rate formats</span>
+                    </div>
+
+                    <div class="demo-data-section">
+                        <span class="or-separator">OR</span>
+                        <button id="generate-demo-btn" class="btn secondary-btn">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Synthetic CTR Dataset
+                        </button>
+                    </div>
+
+                    <!-- File Details Card (hidden initially) -->
+                    <div id="file-details-card" class="details-card hidden">
+                        <div class="details-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">File Name</span>
+                                <span class="detail-value" id="info-filename">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Total Records</span>
+                                <span class="detail-value" id="info-rows">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Detected Columns</span>
+                                <span class="detail-value" id="info-cols-count">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Data Preview Table (hidden initially) -->
+                    <div id="data-preview-container" class="preview-container hidden">
+                        <div class="preview-header">
+                            <h3>Data Preview (First 10 Rows)</h3>
+                            <button id="proceed-to-config-btn" class="btn primary-btn">
+                                Proceed to Configuration <i class="fa-solid fa-arrow-right"></i>
+                            </button>
+                        </div>
+                        <div class="table-scroll">
+                            <table id="preview-table">
+                                <thead>
+                                    <!-- Dynamic -->
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. Configuration View -->
+                <section id="config-view" class="view-panel">
+                    <div class="panel-header">
+                        <h2>Configure Prediction Pipeline</h2>
+                        <p>Configure features, target label, algorithm models, and agent instructions.</p>
+                    </div>
+
+                    <div class="config-grid">
+                        <!-- Settings Column -->
+                        <div class="card config-card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-gear"></i> Pipeline Configurations
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <label for="target-col-select">Target Label Column <i class="fa-solid fa-circle-question" title="The column we want to predict (0 = non-click, 1 = click)."></i></label>
+                                    <select id="target-col-select" class="form-control">
+                                        <!-- Dynamic options -->
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="exclude-cols-input">Exclude Columns <i class="fa-solid fa-circle-question" title="Comma-separated columns to exclude from training (identifiers, timestamps, unique tokens)."></i></label>
+                                    <input type="text" id="exclude-cols-input" class="form-control" value="impression_id, user_id, timestamp">
+                                </div>
+                                <div class="form-group">
+                                    <label>Candidate Algorithms to Train</label>
+                                    <div class="checkbox-group">
+                                        <label class="checkbox-container">
+                                            <input type="checkbox" value="logistic_regression" checked class="model-checkbox">
+                                            <span class="checkmark"></span>
+                                            Logistic Regression (Linear baseline)
+                                        </label>
+                                        <label class="checkbox-container">
+                                            <input type="checkbox" value="random_forest" checked class="model-checkbox">
+                                            <span class="checkmark"></span>
+                                            Random Forest (Bagging Trees)
+                                        </label>
+                                        <label class="checkbox-container">
+                                            <input type="checkbox" value="xgboost" checked class="model-checkbox">
+                                            <span class="checkmark"></span>
+                                            XGBoost (Gradient Boosted Trees)
+                                        </label>
+                                        <label class="checkbox-container">
+                                            <input type="checkbox" value="lightgbm" checked class="model-checkbox">
+                                            <span class="checkmark"></span>
+                                            LightGBM (Fast Gradient Trees)
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Prompt Guidance Column -->
+                        <div class="card config-card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-brain"></i> Agent Prompt Guidance (Optional)
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <label for="user-instructions">Instructions for Agents</label>
+                                    <textarea id="user-instructions" class="form-control text-area" placeholder="e.g., 'Prioritize LightGBM optimization', 'Check if age has a non-linear correlation with click probabilities', 'This is a retail campaign dataset'"></textarea>
+                                </div>
+                                <div class="info-alert">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    <span>If LLM connection is active, the Supervisor and Evaluator Agents will read these instructions to align model selection and analysis.</span>
+                                </div>
+                                <button id="start-pipeline-btn" class="btn primary-btn large-btn btn-glow">
+                                    <i class="fa-solid fa-play"></i> Initialize Multi-Agent Pipeline
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. LangGraph Workflow View -->
+                <section id="run-view" class="view-panel">
+                    <div class="panel-header">
+                        <h2>LangGraph Workflow Execution</h2>
+                        <p>Watch the Supervisor Agent coordinate Data Analysis, Preprocessing, Model Training, and Evaluation in real time.</p>
+                    </div>
+
+                    <div class="execution-layout">
+                        <!-- Graph Visualizer Panel -->
+                        <div class="card graph-card">
+                            <div class="card-header">
+                                <span><i class="fa-solid fa-diagram-project"></i> Execution Graph Topology</span>
+                                <span id="pipeline-status-text" class="run-status-badge started">RUNNING</span>
+                            </div>
+                            <div class="card-body graph-container">
+                                <div class="graph-canvas">
+                                    <!-- SVGs and absolute elements representing graph nodes -->
+                                    <svg class="graph-links" width="100%" height="100%">
+                                        <!-- Lines between supervisor and workers -->
+                                        <path id="link-sup-data" d="M 280 200 Q 150 140 150 180" class="graph-path" />
+                                        <path id="link-data-sup" d="M 150 220 Q 150 260 280 200" class="graph-path" />
+                                        
+                                        <path id="link-sup-model" d="M 320 200 Q 450 140 450 180" class="graph-path" />
+                                        <path id="link-model-sup" d="M 450 220 Q 450 260 320 200" class="graph-path" />
+                                        
+                                        <path id="link-sup-eval" d="M 300 220 Q 300 320 300 300" class="graph-path" />
+                                        <path id="link-eval-sup" d="M 300 300 Q 300 220 300 220" class="graph-path" />
+                                    </svg>
+                                    
+                                    <!-- Nodes -->
+                                    <div class="graph-node supervisor active" id="node-supervisor">
+                                        <i class="fa-solid fa-user-tie node-icon"></i>
+                                        <div class="node-label">Supervisor</div>
+                                        <span class="active-badge">Active</span>
+                                    </div>
+                                    
+                                    <div class="graph-node worker" id="node-data_agent">
+                                        <i class="fa-solid fa-database node-icon"></i>
+                                        <div class="node-label">Data Agent</div>
+                                        <span class="active-badge">Active</span>
+                                    </div>
+                                    
+                                    <div class="graph-node worker" id="node-model_agent">
+                                        <i class="fa-solid fa-gears node-icon"></i>
+                                        <div class="node-label">Model Agent</div>
+                                        <span class="active-badge">Active</span>
+                                    </div>
+                                    
+                                    <div class="graph-node worker" id="node-evaluator_agent">
+                                        <i class="fa-solid fa-chart-pie node-icon"></i>
+                                        <div class="node-label">Evaluator Agent</div>
+                                        <span class="active-badge">Active</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Terminal Output Panel -->
+                        <div class="card terminal-card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-terminal"></i> Agent Execution Log Console
+                            </div>
+                            <div class="card-body terminal-body" id="log-terminal">
+                                <div class="log-line system-msg">> Initializing workflow graph execution state...</div>
+                                <!-- Dynamic logs filled here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="run-footer-actions hidden" id="run-completion-banner">
+                        <div class="success-alert">
+                            <i class="fa-solid fa-circle-check"></i>
+                            <span>Multi-Agent Pipeline completed successfully. A total of 4 models were built and evaluated.</span>
+                        </div>
+                        <button id="view-analytics-btn" class="btn primary-btn btn-glow">
+                            Go to Performance Analytics <i class="fa-solid fa-chart-line"></i>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 4. Model Analytics View -->
+                <section id="analytics-view" class="view-panel">
+                    <div class="panel-header">
+                        <h2>Model Performance Analytics</h2>
+                        <p>Compare validation statistics and read the Agent-compiled CTR evaluation report.</p>
+                    </div>
+
+                    <!-- Performance Scorecards -->
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <span class="m-title">Champion Model</span>
+                            <div class="m-value" id="champion-model-name">-</div>
+                            <span class="m-desc">Determined by Evaluator Agent</span>
+                        </div>
+                        <div class="metric-card accent">
+                            <span class="m-title">Validation AUC-ROC</span>
+                            <div class="m-value" id="champion-auc">-</div>
+                            <span class="m-desc">Discriminatory ranking power</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="m-title">Log Loss</span>
+                            <div class="m-value" id="champion-logloss">-</div>
+                            <span class="m-desc">Probability calibration cost</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="m-title">Accuracy</span>
+                            <div class="m-value" id="champion-accuracy">-</div>
+                            <span class="m-desc">Classification threshold (0.50)</span>
+                        </div>
+                    </div>
+
+                    <!-- Charts and Report Grid -->
+                    <div class="analytics-layout-grid">
+                        <!-- Charts Column -->
+                        <div class="analytics-charts">
+                            <div class="card chart-box">
+                                <div class="card-header">
+                                    <i class="fa-solid fa-chart-area"></i> Validation ROC Curves
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="roc-chart"></canvas>
+                                </div>
+                            </div>
+                            <div class="card chart-box">
+                                <div class="card-header">
+                                    <i class="fa-solid fa-chart-bar"></i> Feature Importances (Champion Model)
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="importance-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Report Column -->
+                        <div class="analytics-report">
+                            <div class="card report-box">
+                                <div class="card-header">
+                                    <span><i class="fa-solid fa-file-invoice"></i> Agent Evaluation Report</span>
+                                    <a id="download-model-link" href="#" class="btn secondary-btn small-btn" download>
+                                        <i class="fa-solid fa-download"></i> Download Model (.joblib)
+                                    </a>
+                                </div>
+                                <div class="card-body report-markdown" id="markdown-report-container">
+                                    <!-- Rendered markdown -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analytics-footer">
+                        <button id="go-to-sandbox-btn" class="btn primary-btn btn-glow">
+                            Open Inference Sandbox <i class="fa-solid fa-flask"></i>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 5. Inference Sandbox View -->
+                <section id="sandbox-view" class="view-panel">
+                    <div class="panel-header">
+                        <h2>Inference Sandbox</h2>
+                        <p>Simulate ad impressions by adjusting client/context features and observe predicted click probabilities from the trained model.</p>
+                    </div>
+
+                    <div class="sandbox-grid">
+                        <!-- Features Form Card -->
+                        <div class="card sandbox-form-card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-pen-to-square"></i> Configure Impression Context
+                            </div>
+                            <div class="card-body">
+                                <form id="sandbox-prediction-form">
+                                    <div class="sandbox-fields" id="sandbox-fields-container">
+                                        <!-- Dynamic Feature Fields -->
+                                    </div>
+                                    <button type="submit" class="btn primary-btn large-btn btn-glow mt-4">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i> Predict Click Probability
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Prediction Outcome Card -->
+                        <div class="card sandbox-results-card">
+                            <div class="card-header">
+                                <i class="fa-solid fa-eye"></i> Prediction Results
+                            </div>
+                            <div class="card-body results-container">
+                                <div class="gauge-wrapper">
+                                    <!-- circular progress meter -->
+                                    <div class="circular-progress" id="probability-dial">
+                                        <div class="value-container" id="probability-value">0%</div>
+                                    </div>
+                                </div>
+                                <div class="outcome-verdict text-center">
+                                    <h3 id="verdict-title">Ready to Predict</h3>
+                                    <p id="verdict-desc">Configure features on the left and click predict to calculate CTR probability.</p>
+                                </div>
+                                <div class="sandbox-explanation-box hidden" id="sandbox-explanation">
+                                    <!-- Explanation text -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- API Key Settings Modal -->
+    <div id="settings-modal" class="modal-overlay hidden">
+        <div class="modal-content card">
+            <div class="card-header">
+                <h3><i class="fa-solid fa-key"></i> LLM Configuration Settings</h3>
+                <button id="close-modal-btn" class="close-btn">&times;</button>
+            </div>
+            <div class="card-body">
+                <p>Provide your Google Gemini API Key. If provided, the system will use Gemini to run reasoning on features, model comparative analysis, and compile a custom report. If empty, the system runs in local Heuristic Mode.</p>
+                <div class="form-group mt-3">
+                    <label for="api-key-input">GEMINI_API_KEY / GOOGLE_API_KEY</label>
+                    <input type="password" id="api-key-input" class="form-control" placeholder="Enter API Key (Optional)">
+                </div>
+                <div class="info-alert mt-3">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span>Your key is sent directly to the local FastAPI backend to authenticate langchain requests, and is not stored permanently.</span>
+                </div>
+                <div class="modal-actions mt-4">
+                    <button id="save-key-btn" class="btn primary-btn">Save Configuration</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
