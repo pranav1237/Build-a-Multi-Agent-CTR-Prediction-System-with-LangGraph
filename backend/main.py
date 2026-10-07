@@ -75,6 +75,7 @@ async def upload_dataset(file: UploadFile = File(...)):
             "total_rows": len(df),
             "columns": list(df.columns),
             "preview": preview,
+            "csv_data": df.to_csv(index=False),
         }
     except Exception as exc:
         if os.path.exists(filepath):
