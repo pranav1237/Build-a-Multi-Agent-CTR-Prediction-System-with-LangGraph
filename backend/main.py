@@ -3,6 +3,7 @@ import uuid
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -11,8 +12,16 @@ server = FastAPI(
     description="LangGraph-powered Click-Through Rate prediction workflow and analytics dashboard",
 )
 
-# Same-origin requests are used by the deployed frontend. CORS remains permissive
-# for local development and API testing.
+# Keep production static assets outside FastAPI middleware so Vercel can
+# promote StaticFiles to its CDN. CORS is only needed for local development.
+if not os.environ.get("VERCEL"):
+    server.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Vercel Functions have a read-only deployment filesystem. Use /tmp for
