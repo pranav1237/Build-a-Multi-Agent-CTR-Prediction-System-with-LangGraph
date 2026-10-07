@@ -112,7 +112,7 @@ function setupModalHandlers() {
 
 async function checkServerApiKeyStatus() {
     try {
-        const res = await fetch(apiUrl("/api-key-status");
+        const res = await fetch(apiUrl("/api-key-status"));
         const data = await res.json();
         updateLlmBadge(data.has_key, data.has_key ? "Server LLM Connected" : "Local Heuristic Mode");
     } catch (e) {
@@ -171,7 +171,7 @@ async function handleFileUpload(file) {
     formData.append("file", file);
 
     try {
-        const res = await fetch(apiUrl("/upload", {
+        const res = await fetch(apiUrl("/upload"), {
             method: "POST",
             body: formData
         });
@@ -192,7 +192,7 @@ async function handleGenerateDemo() {
     formData.append("num_rows", 2500);
 
     try {
-        const res = await fetch(apiUrl("/generate-sample", {
+        const res = await fetch(apiUrl("/generate-sample"), {
             method: "POST",
             body: formData
         });
@@ -306,7 +306,7 @@ async function startPipelineRun() {
         startPipelineBtn.disabled = true;
         startPipelineBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Initializing Agents...';
         
-        const res = await fetch(apiUrl("/run", {
+        const res = await fetch(apiUrl("/run"), {
             method: "POST",
             body: formData
         });
@@ -779,7 +779,7 @@ sandboxPredictionForm.addEventListener('submit', async (e) => {
     }
 
     try {
-        const res = await fetch(apiUrl("/predict", {
+        const res = await fetch(apiUrl("/predict"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ features: featuresPayload })
