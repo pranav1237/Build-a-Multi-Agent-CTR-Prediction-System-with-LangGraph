@@ -3,8 +3,7 @@ import threading
 import uuid
 from typing import Any, Dict, Optional
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -15,17 +14,18 @@ server = FastAPI(
 
 # Same-origin requests are used by the deployed frontend. CORS remains permissive
 # for local development and API testing.
-server.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIR = os.path.join(BASE_DIR, "data")
-OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+
+# Vercel Functions have a read-only deployment filesystem. Use /tmp for
+# generated uploads and model artifacts. Local development keeps the familiar
+# backend/data and backend/output directories.
+if os.environ.get("VERCEL"):
+    RUNTIME_DIR = os.path.join("/tmp", "ctr-prediction")
+else:
+    RUNTIME_DIR = os.path.join(os.path.dirname(BASE_DIR), ".runtime")
+
+UPLOAD_DIR = os.path.join(RUNTIME_DIR, "data")
+OUTPUT_DIR = os.path.join(RUNTIME_DIR, "output")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -167,7 +167,7 @@ def start_pipeline(
     exclude_columns: str = Form(""),
     user_instructions: str = Form(""),
     api_key: str = Form(""),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
+    background_tasks: BackgroundTasks = None,
 ):
     """Start the LangGraph CTR workflow."""
     if not os.path.exists(dataset_path):
