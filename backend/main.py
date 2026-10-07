@@ -236,12 +236,35 @@ def download_model():
         raise HTTPException(status_code=400, detail="No model has been trained yet.")
     return FileResponse(path=model_path, filename="ctr_champion_model.joblib", media_type="application/octet-stream")
 
-# Serve frontend single page app
+# Health endpoint for deployment/runtime checks
+@server.get("/health")
+def health_check():
+    return {"status": "ok", "service": "multi-agent-ctr-prediction"}
+
+# Serve the existing frontend from the same FastAPI deployment.
+# Keep explicit file routes so the Vercel Python runtime can always resolve
+# the SPA entrypoint and its browser assets without relying on a separate host.
 frontend_dir = os.path.join(os.path.dirname(BASE_DIR), "frontend")
 
-if os.path.exists(frontend_dir):
+if os.path.isdir(frontend_dir):
+    frontend_index = os.path.join(frontend_dir, "index.html")
+    frontend_app_js = os.path.join(frontend_dir, "app.js")
+    frontend_style_css = os.path.join(frontend_dir, "style.css")
+
+    @server.get("/", include_in_schema=False)
+    def read_root():
+        return FileResponse(frontend_index, media_type="text/html")
+
+    @server.get("/app.js", include_in_schema=False)
+    def frontend_javascript():
+        return FileResponse(frontend_app_js, media_type="application/javascript")
+
+    @server.get("/style.css", include_in_schema=False)
+    def frontend_stylesheet():
+        return FileResponse(frontend_style_css, media_type="text/css")
+
     server.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 else:
-    @server.get("/")
+    @server.get("/", include_in_schema=False)
     def read_root():
         return HTMLResponse("<h2>Frontend directory not found. Please create 'frontend/' and index.html.</h2>")
