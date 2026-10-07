@@ -346,6 +346,8 @@ async function startPipelineRun() {
             pipelineMetadata = data.state?.metadata;
             renderModelPerformance(data.state?.train_results, data.state?.best_model_type, data.state?.evaluation_report);
         }
+        startPipelineBtn.disabled = false;
+        startPipelineBtn.innerHTML = '<i class="fa-solid fa-play"></i> Initialize Multi-Agent Pipeline';
     } catch (e) {
         alert("Failed to start run: " + e.message);
         startPipelineBtn.disabled = false;
