@@ -1,9 +1,8 @@
 import os
-import threading
 import uuid
 from typing import Any, Dict, Optional
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -13,19 +12,28 @@ server = FastAPI(
     description="LangGraph-powered Click-Through Rate prediction workflow and analytics dashboard",
 )
 
-# Same-origin requests are used by the deployed frontend. CORS remains permissive
-# for local development and API testing.
-server.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+# Keep production static assets outside FastAPI middleware so Vercel can
+# promote StaticFiles to its CDN. CORS is only needed for local development.
+if not os.environ.get("VERCEL"):
+    server.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIR = os.path.join(BASE_DIR, "data")
-OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+
+# Vercel Functions have a read-only deployment filesystem. Use /tmp for
+# generated uploads and model artifacts. Local development keeps the familiar
+# backend/data and backend/output directories.
+if os.environ.get("VERCEL"):
+    RUNTIME_DIR = os.path.join("/tmp", "ctr-prediction")
+else:
+    RUNTIME_DIR = os.path.join(os.path.dirname(BASE_DIR), ".runtime")
+
+UPLOAD_DIR = os.path.join(RUNTIME_DIR, "data")
+OUTPUT_DIR = os.path.join(RUNTIME_DIR, "output")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -76,6 +84,7 @@ async def upload_dataset(file: UploadFile = File(...)):
             "total_rows": len(df),
             "columns": list(df.columns),
             "preview": preview,
+            "csv_data": df.to_csv(index=False),
         }
     except Exception as exc:
         if os.path.exists(filepath):
@@ -161,58 +170,69 @@ def run_agent_workflow(run_id: str, inputs: dict, api_key: Optional[str] = None)
 
 
 @server.post("/run")
-def start_pipeline(
-    dataset_path: str = Form(...),
+async def start_pipeline(
+    dataset_path: str = Form(""),
     target_column: str = Form("clicked"),
     exclude_columns: str = Form(""),
     user_instructions: str = Form(""),
     api_key: str = Form(""),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
+    model_types: str = Form(""),
+    dataset_file: UploadFile | None = File(None),
+    dataset_csv: str = Form(""),
 ):
-    """Start the LangGraph CTR workflow."""
-    if not os.path.exists(dataset_path):
-        raise HTTPException(
-            status_code=400,
-            detail="Dataset file not found. Upload data first.",
-        )
+    """Run the LangGraph workflow inside the current Vercel request."""
+    if dataset_file is not None and dataset_file.filename:
+        if not dataset_file.filename.lower().endswith(".csv"):
+            raise HTTPException(status_code=400, detail="Only CSV files are supported.")
+        filename = f"{uuid.uuid4()}_{os.path.basename(dataset_file.filename)}"
+        dataset_path = os.path.join(UPLOAD_DIR, filename)
+        with open(dataset_path, "wb") as f:
+            f.write(await dataset_file.read())
+    elif dataset_csv.strip():
+        filename = f"dataset_{uuid.uuid4().hex[:8]}.csv"
+        dataset_path = os.path.join(UPLOAD_DIR, filename)
+        with open(dataset_path, "w", encoding="utf-8", newline="") as f:
+            f.write(dataset_csv)
+    elif not dataset_path or not os.path.exists(dataset_path):
+        raise HTTPException(status_code=400, detail="Dataset is missing. Upload the CSV or generate the sample again.")
 
     run_id = str(uuid.uuid4())
     ex_cols = [c.strip() for c in exclude_columns.split(",") if c.strip()]
     if not ex_cols:
         ex_cols = ["impression_id", "user_id", "timestamp"]
-
+    selected_models = [m.strip() for m in model_types.split(",") if m.strip()]
+    allowed_models = {"logistic_regression", "random_forest", "xgboost", "lightgbm"}
+    selected_models = [m for m in selected_models if m in allowed_models]
+    if not selected_models:
+        selected_models = ["logistic_regression", "random_forest", "xgboost", "lightgbm"]
+    run_output_dir = os.path.join(OUTPUT_DIR, run_id)
+    os.makedirs(run_output_dir, exist_ok=True)
     initial_state = {
         "dataset_path": dataset_path,
         "target_column": target_column,
         "exclude_columns": ex_cols,
         "metadata": {},
         "user_instructions": user_instructions.strip() or None,
+        "model_types": selected_models,
         "active_agent": "Supervisor",
         "status": "started",
         "logs": [],
         "preprocessing_config": {},
-        "model_selection": [],
+        "model_selection": selected_models,
         "train_results": {},
         "best_model_type": None,
         "evaluation_report": None,
-        "output_dir": OUTPUT_DIR,
+        "output_dir": run_output_dir,
     }
-
-    runs[run_id] = {
-        "state": initial_state,
-        "completed": False,
-        "error": None,
+    runs[run_id] = {"state": initial_state, "completed": False, "error": None}
+    run_agent_workflow(run_id, initial_state, api_key.strip() or None)
+    return {
+        "run_id": run_id,
+        "status": runs[run_id]["state"]["status"],
+        "completed": runs[run_id]["completed"],
+        "error": runs[run_id]["error"],
+        "state": runs[run_id]["state"],
     }
-
-    thread = threading.Thread(
-        target=run_agent_workflow,
-        args=(run_id, initial_state, api_key.strip() or None),
-        daemon=True,
-    )
-    thread.start()
-
-    return {"run_id": run_id, "status": "started"}
-
 
 @server.get("/status/{run_id}")
 def get_run_status(run_id: str):

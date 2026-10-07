@@ -17,7 +17,7 @@ def model_agent_node(state: AgentState) -> dict:
     
     # Models to train (can be customized by user)
     # Default list
-    model_types = ['logistic_regression', 'random_forest', 'xgboost', 'lightgbm']
+    model_types = state.get('model_types') or ['logistic_regression', 'random_forest', 'xgboost', 'lightgbm']
     
     add_agent_log(logs, "Model Agent", f"Initializing model training pipeline. Candidate models: {', '.join(model_types)}")
     
