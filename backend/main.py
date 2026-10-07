@@ -1,4 +1,5 @@
 import os
+import shutil
 import uuid
 from typing import Any, Dict, Optional
 
@@ -150,6 +151,15 @@ def run_agent_workflow(run_id: str, inputs: dict, api_key: Optional[str] = None)
                 runs[run_id]["state"]["active_agent"] = (
                     node_name.replace("_", " ").title()
                 )
+
+        # Keep the latest trained artifacts in the runtime-level output directory
+        # so /predict and /download/model use the same location as the workflow.
+        run_output_dir = runs[run_id]["state"].get("output_dir")
+        if run_output_dir and run_output_dir != OUTPUT_DIR:
+            for artifact in ("preprocessor.joblib", "best_model.joblib", "pipeline_metadata.joblib"):
+                src = os.path.join(run_output_dir, artifact)
+                if os.path.exists(src):
+                    shutil.copy2(src, os.path.join(OUTPUT_DIR, artifact))
 
         runs[run_id]["completed"] = True
         runs[run_id]["state"]["status"] = "completed"
