@@ -4,5 +4,6 @@
     "app.py": {
       "maxDuration": 300
     }
-  }
+  },
+  "fluid": true
 }
