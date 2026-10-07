@@ -36,6 +36,11 @@ const apiKeyInput = document.getElementById('api-key-input');
 const sandboxFieldsContainer = document.getElementById('sandbox-fields-container');
 const sandboxPredictionForm = document.getElementById('sandbox-prediction-form');
 
+// All API requests use the current deployed origin so the static frontend and FastAPI backend stay together on Vercel.
+function apiUrl(path) {
+    return new URL(path, window.location.origin).toString();
+}
+
 // Initialize Application
 document.addEventListener("DOMContentLoaded", () => {
     setupNavigation();
@@ -107,7 +112,7 @@ function setupModalHandlers() {
 
 async function checkServerApiKeyStatus() {
     try {
-        const res = await fetch("/api-key-status");
+        const res = await fetch(apiUrl("/api-key-status");
         const data = await res.json();
         updateLlmBadge(data.has_key, data.has_key ? "Server LLM Connected" : "Local Heuristic Mode");
     } catch (e) {
@@ -166,7 +171,7 @@ async function handleFileUpload(file) {
     formData.append("file", file);
 
     try {
-        const res = await fetch("/upload", {
+        const res = await fetch(apiUrl("/upload", {
             method: "POST",
             body: formData
         });
@@ -187,7 +192,7 @@ async function handleGenerateDemo() {
     formData.append("num_rows", 2500);
 
     try {
-        const res = await fetch("/generate-sample", {
+        const res = await fetch(apiUrl("/generate-sample", {
             method: "POST",
             body: formData
         });
@@ -301,7 +306,7 @@ async function startPipelineRun() {
         startPipelineBtn.disabled = true;
         startPipelineBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Initializing Agents...';
         
-        const res = await fetch("/run", {
+        const res = await fetch(apiUrl("/run", {
             method: "POST",
             body: formData
         });
@@ -338,7 +343,7 @@ async function pollRunStatus() {
     if (!currentRunId) return;
 
     try {
-        const res = await fetch(`/status/${currentRunId}`);
+        const res = await fetch(apiUrl(`/status/${currentRunId}`));
         if (!res.ok) throw new Error("Connection error");
         const data = await res.json();
 
@@ -774,7 +779,7 @@ sandboxPredictionForm.addEventListener('submit', async (e) => {
     }
 
     try {
-        const res = await fetch("/predict", {
+        const res = await fetch(apiUrl("/predict", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ features: featuresPayload })
