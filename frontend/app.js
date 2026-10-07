@@ -1,5 +1,7 @@
 // Global Application State
 let currentDataset = null;
+let currentDatasetFile = null;
+let currentDatasetCsv = "";
 let currentRunId = null;
 let currentApiKey = "";
 let pollInterval = null;
@@ -178,6 +180,8 @@ async function handleFileUpload(file) {
         
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
+        currentDatasetFile = file;
+        currentDatasetCsv = "";
         displayDatasetPreview(data);
     } catch (e) {
         alert("Upload failed: " + e.message);
@@ -199,6 +203,8 @@ async function handleGenerateDemo() {
         
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
+        currentDatasetFile = null;
+        currentDatasetCsv = data.csv_data || "";
         displayDatasetPreview(data);
     } catch (e) {
         alert("Demo generation failed: " + e.message);
@@ -294,10 +300,17 @@ async function startPipelineRun() {
     }
 
     const formData = new FormData();
-    formData.append("dataset_path", currentDataset.dataset_path);
     formData.append("target_column", targetCol);
     formData.append("exclude_columns", excludeCols);
     formData.append("user_instructions", instructions);
+    formData.append("model_types", checkedModels.join(","));
+    if (currentDatasetFile) {
+        formData.append("dataset_file", currentDatasetFile, currentDatasetFile.name);
+    } else if (currentDatasetCsv) {
+        formData.append("dataset_csv", currentDatasetCsv);
+    } else if (currentDataset.dataset_path) {
+        formData.append("dataset_path", currentDataset.dataset_path);
+    }
     if (currentApiKey) {
         formData.append("api_key", currentApiKey);
     }
@@ -316,22 +329,23 @@ async function startPipelineRun() {
         
         currentRunId = data.run_id;
         previousLogCount = 0;
-        
-        // Reset console terminal
-        logTerminal.innerHTML = '<div class="log-line system-msg">> Multi-Agent run initialized with session token: ' + currentRunId + '</div>';
-        
-        // Reset completion banner
-        runCompletionBanner.classList.add('hidden');
-        
-        // Enable Nav and Navigate
-        enableNavTab('nav-run');
-        switchView('run-view');
-        
-        // Start Polling
-        pipelineStatusText.className = "run-status-badge started";
-        pipelineStatusText.textContent = "RUNNING";
-        
-        pollInterval = setInterval(pollRunStatus, 1500);
+        logTerminal.innerHTML = "";
+        runCompletionBanner.classList.add("hidden");
+        enableNavTab("nav-run");
+        switchView("run-view");
+        pipelineStatusText.className = data.error ? "run-status-badge failed" : "run-status-badge completed";
+        pipelineStatusText.textContent = data.error ? "FAILED" : "COMPLETED";
+        updateLogsTerminal(data.state?.logs || []);
+        updateGraphVisualization(data.state?.active_agent, data.state?.status, data.state?.active_target);
+        if (data.error) {
+            appendConsoleLine("System", "Workflow execution failed: " + data.error, "error-tag");
+        } else {
+            runCompletionBanner.classList.remove("hidden");
+            enableNavTab("nav-analytics");
+            enableNavTab("nav-sandbox");
+            pipelineMetadata = data.state?.metadata;
+            renderModelPerformance(data.state?.train_results, data.state?.best_model_type, data.state?.evaluation_report);
+        }
     } catch (e) {
         alert("Failed to start run: " + e.message);
         startPipelineBtn.disabled = false;
